@@ -1,0 +1,8 @@
+prefix=/home/nvidia/ros_ws_chije/install
+
+Name: auto_car
+Description: Description of auto_car
+Version: 0.1.0
+Cflags: -I/home/nvidia/ros_ws_chije/install/include
+Libs: -L/home/nvidia/ros_ws_chije/install/lib -lauto_car
+Requires: roscpp std_msgs

@@ -1,0 +1,2 @@
+auto_car
+-DCATKIN_DEVEL_PREFIX=/home/nvidia/ros_ws_chije/devel -DCMAKE_INSTALL_PREFIX=/home/nvidia/ros_ws_chije/install -G Unix Makefiles
