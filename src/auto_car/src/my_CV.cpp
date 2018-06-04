@@ -1,18 +1,30 @@
 #include "my_CV.h"
 //get outline using canny
+//debugcode
+Mat drawLines2(Mat frame, Point &ptl1, Point &ptl2)
+{
+    Mat line_img(frame.rows,frame.cols,frame.type(), cv::Scalar(0));
+    line(line_img, ptl1, ptl2, Scalar(0, 0, 255),3); // draw line in raw image
+    //line(line_img, ptr1, ptr2, Scalar(0, 0, 255),3); // draw line in raw image
+    addWeighted(frame, 1.0, line_img, 1.0, 0.0, frame);
+    return frame;
+}
+//debug end
 Mat myCanny(Mat &frame)
 {
     Mat grayImage, edgeImage;
     cvtColor(frame,grayImage,COLOR_BGR2GRAY); // convert color image
-    Canny(grayImage,edgeImage,125,250,3); // using canny get outline
+	GaussianBlur(grayImage, grayImage, Size(5, 5), 0.5);
+    Canny(grayImage,edgeImage,125,350,3); // using canny get outline
     return edgeImage;
 }
-Mat getROI(Mat& origImag, Point2f top, Point2f botLeft, Point2f botRight){
+Mat getROI(Mat& origImag, Point2f topRight, Point2f topLeft, Point2f botLeft, Point2f botRight){
     Mat black(origImag.rows, origImag.cols, origImag.type(), cv::Scalar::all(0));
     Mat mask(origImag.rows, origImag.cols, CV_8UC1, cv::Scalar(0));
     vector< vector<Point> >  co_ordinates;
     co_ordinates.push_back(vector<Point>());
-    co_ordinates[0].push_back(top);
+    co_ordinates[0].push_back(topRight);
+	co_ordinates[0].push_back(topLeft);
     co_ordinates[0].push_back(botLeft);
     co_ordinates[0].push_back(botRight);
     drawContours( mask,co_ordinates,0, Scalar(255),CV_FILLED, 8 );
@@ -47,7 +59,8 @@ void groupLines(vector<Vec4i> &lines, vector<int> &left_line_x, vector<int> &lef
         if(x2 != x1)
         {
             slope = ((double)y2 - y1)/(x2-x1); //get slope
-            if(fabs(slope)<0.5)
+			cout<<slope<<endl;//testcode
+            if(fabs(slope)>10)
                 continue;
             else if(slope<0)    // leftLine
             {
@@ -70,7 +83,7 @@ void groupLines(vector<Vec4i> &lines, vector<int> &left_line_x, vector<int> &lef
         }
     }
 }
-void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageRows)
+void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageCols)
 {
     //gradient -> using r, theta
     double gradient, distance, yIC;
@@ -107,12 +120,21 @@ void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageRows)
 		if(inlier>inMax)
         {
             inMax = inlier;
+			/*
             int y1 = imageRows;
             int x1 = (int)((y1-yIC)/gradient);
             int y2 = (imageRows*3)/4;
             int x2 = (int)((y2-yIC)/gradient);
+			*/
+			int x1 = imageCols-300;
+			int y1 = (int)((gradient*x1)+yIC);
+			int x2 = imageCols;
+			int y2 = (int)((gradient*x2)+yIC);
             pt1 = Point(x1, y1);
             pt2 = Point(x2, y2);
+			cout<<"select point : (x1 = "<< x[r1] <<", y1 = "<<y[r1]<<")   ( x2 = "<<x[r2]<<", y2 = "<<y[r2]<<" )"<<endl; 
+			cout<<"gradient : "<<gradient<<" yIC : "<<yIC<<endl;//debug
+			cout<<"ransac line : "<<x1<<", "<<y1<<"    "<<x2<<", "<<y2<<endl;//debug code
         }
         inlier = 0;
 
@@ -145,7 +167,7 @@ double getControl(Point &ptl1, Point &ptl2, Point &ptr1, Point &ptr2)
         time(&cur_time);
         del_time = difftime(cur_time,pre_time);
         time(&pre_time);
-        
+
         error = desired_angle - current_angle;
         P_control = Kp * error;
         I_control += Ki * error * del_time;
@@ -172,16 +194,32 @@ int imageProcess(Mat &frame)
     vector<int> right_line_x;
     vector<int> right_line_y;
     Point ptl1, ptl2, ptr1, ptr2;
-    Mat roiImage, edgeImage, linedImage;
+    Mat roiImage, houghImage, edgeImage, linedImage;
+    /*//hsv start
+    Scalar hsv_black_min = cvScalar(41, 0, 0);
+    Scalar hsv_black_max = cvScalar(230, 255, 115);
+    cvtColor(frame, hsvImage, COLOR_BGR2HSV); // frame -> hsvImage�� HSV��
+    inRange(hsvImage, hsv_black_min, hsv_black_max, hsvImage);//hsv->dstImage �÷�����
+    //hsv end*/
 	edgeImage = myCanny(frame);
-    roiImage = getROI(edgeImage,Point2f(frame.cols/2,0),Point2f(0,frame.rows),Point2f(frame.cols,frame.rows));
+    roiImage = getROI(edgeImage,Point2f(frame.cols, frame.rows/2),Point2f(0, frame.rows/2),Point2f(0,frame.rows),Point2f(frame.cols,frame.rows));
     myHough(roiImage, lines);
+	/*//debug
+		houghImage = frame;
+		for(int i=0;i<lines.size();i++)
+		{
+			Vec4i param = lines[i];
+			const int x1= param[0], y1=param[1], x2=param[2], y2=param[3];
+			Point p1(x1,y1), p2(x2,y2);
+			houghImage = drawLines2(houghImage,p1,p2);
+		}
+	//end */
     groupLines(lines, left_line_x, left_line_y, right_line_x, right_line_y);
 	//RANSAC
-    myransac(left_line_x,left_line_y,ptl1, ptl2, frame.rows);
-    myransac(right_line_x,right_line_y,ptr1, ptr2, frame.rows);
+    myransac(left_line_x,left_line_y,ptl1, ptl2, 300);
+    myransac(right_line_x,right_line_y,ptr1, ptr2, frame.cols);
     linedImage = drawLines(frame, ptl1, ptl2, ptr1, ptr2);
-	///*******testcode**************************************
+	/*******testcode**************************************
 	Mat halfedge, halfroi, halfline;
 	resize(edgeImage,halfedge,Size(edgeImage.cols/2,edgeImage.rows/2));
 	resize(roiImage,halfroi,Size(roiImage.cols/2,roiImage.rows/2));
@@ -189,9 +227,14 @@ int imageProcess(Mat &frame)
 	imshow("edge",halfedge);
 	imshow("roi",halfroi);
 	imshow("line",halfline);
-	
+
 	// *******testcode**************************************/
-    
+    //imshow("edge",edgeImage);
+	//imshow("roi",roiImage);
+	imshow("roi",roiImage);
+	imshow("line",linedImage);
+	//imshow("hough",houghImage);
     double steeringInfo = getControl(ptl1, ptl2, ptr1, ptr2);
+	waitKey();
     return (int)steeringInfo;
 }
