@@ -4,10 +4,22 @@
 
 #include <cmath>
 #include <vector>
+#include <ctime>
 #include "opencv2/opencv.hpp"
 
+/******************************
+//pid control
+********************************/
+#define Kp 1
+#define Ki 1
+#define Kd 1
+/******************************
+//end pid control
+********************************/
 #ifndef __CV_STD_NAMESPACE__
 #define __CV_STD_NAMESPACE__
+#include <iostream>
+int control_cnt=1;
 using namespace cv;
 using namespace std;
 #endif

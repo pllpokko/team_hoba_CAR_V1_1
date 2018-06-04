@@ -80,19 +80,20 @@ void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageRows)
     int threshold = 20;
     int inlier = 0, inMax = 0;
     int x1,y1,x2,y2;
-    for(int i=0;i<resultn;i++)
+    if(x.empty() || y.empty())
+		return;
+	for(int i=0;i<resultn;i++)
     {
         r1 = rand()%(dataNum);
         r2 = ((rand()%(dataNum))+r1)%(dataNum);
-        if(r1 == r2 || x[r1] == x[r2])
+		if(r1 == r2 || x[r1] == x[r2])
         {
             i--;
             continue;
         }
-
         gradient = ((double)(y[r2]-y[r1]))/(x[r2]-x[r1]);
-        yIC = y[r1] - (gradient * x[r1]);
-        for(int k=0;k<dataNum;k++)
+		yIC = y[r1] - (gradient * x[r1]);
+		for(int k=0;k<dataNum;k++)
         {
             if(k!=r1 && k!=r2)
             {
@@ -103,7 +104,7 @@ void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageRows)
                 }
             }
         }
-        if(inlier>inMax)
+		if(inlier>inMax)
         {
             inMax = inlier;
             int y1 = imageRows;
@@ -114,14 +115,46 @@ void myransac(vector<int> x,vector<int> y,Point &pt1, Point &pt2,int imageRows)
             pt2 = Point(x2, y2);
         }
         inlier = 0;
+
     }
 }
 double getControl(Point &ptl1, Point &ptl2, Point &ptr1, Point &ptr2)
 {
+    const static double desired_angle = 90;
+    static double current_angle;
+    static double error, pre_error;
+    static double P_control, I_control, D_control;
+    static double del_time;
+    static double PID_control;
+    static time_t pre_time, cur_time;
+
     double mid1 = (ptl1.x + ptr1.x)/2.0;
     double mid2 = (ptl2.x + ptr2.x)/2.0;
-    double result = atan2((ptl1.y - ptl2.y), (mid2 - mid1)) * 180.0/PI;
-    return result;
+    current_angle = atan2((ptl1.y - ptl2.y), (mid2 - mid1)) * 180.0/PI;
+	PID_control = current_angle;
+	/*
+    if(control_cnt) // first_time
+    {
+        PID_control = desired_angle - current_angle;
+        time(&pre_time);
+        pre_error = desired_angle - current_angle;
+        control_cnt = 0;
+    }
+    else //first time
+    {
+        time(&cur_time);
+        del_time = difftime(cur_time,pre_time);
+        time(&pre_time);
+        
+        error = desired_angle - current_angle;
+        P_control = Kp * error;
+        I_control += Ki * error * del_time;
+        D_control = Kd*(error - pre_error)/del_time;
+        PID_control = P_control + I_control + D_control;
+        pre_error = error;
+    }
+	**/
+    return PID_control;
 }
 Mat drawLines(Mat frame, Point &ptl1, Point &ptl2, Point &ptr1, Point &ptr2)
 {
@@ -140,15 +173,25 @@ int imageProcess(Mat &frame)
     vector<int> right_line_y;
     Point ptl1, ptl2, ptr1, ptr2;
     Mat roiImage, edgeImage, linedImage;
-    edgeImage = myCanny(frame);
+	edgeImage = myCanny(frame);
     roiImage = getROI(edgeImage,Point2f(frame.cols/2,0),Point2f(0,frame.rows),Point2f(frame.cols,frame.rows));
     myHough(roiImage, lines);
     groupLines(lines, left_line_x, left_line_y, right_line_x, right_line_y);
-    //RANSAC
+	//RANSAC
     myransac(left_line_x,left_line_y,ptl1, ptl2, frame.rows);
     myransac(right_line_x,right_line_y,ptr1, ptr2, frame.rows);
     linedImage = drawLines(frame, ptl1, ptl2, ptr1, ptr2);
-    imshow("detectedImage",linedImage);
+	///*******testcode**************************************
+	Mat halfedge, halfroi, halfline;
+	resize(edgeImage,halfedge,Size(edgeImage.cols/2,edgeImage.rows/2));
+	resize(roiImage,halfroi,Size(roiImage.cols/2,roiImage.rows/2));
+	resize(linedImage,halfline,Size(linedImage.cols/2,linedImage.rows/2));
+	imshow("edge",halfedge);
+	imshow("roi",halfroi);
+	imshow("line",halfline);
+	
+	// *******testcode**************************************/
+    
     double steeringInfo = getControl(ptl1, ptl2, ptr1, ptr2);
     return (int)steeringInfo;
 }
